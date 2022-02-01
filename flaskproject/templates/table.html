@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="title">
+  Database Tables
+</h1>
+
+<h2 class="subtitle">
+  Users
+</h2>
+
+<table >
+  <tr>
+    <th>name</th>
+    <th>password</th>
+    <th>email</th>
+  </tr>  
+{%for u in users%}
+  <tr>
+    <td>{{ u.name }}</td>
+    <td>{{ u.password }}</td>
+    <td>{{ u.email }}</td>
+  </tr>
+{%endfor%}
+</table>
+<h2 class="subtitle">
+  Instruments 
+</h2>
+
+<table >
+  <tr>
+    <th>id</th>
+    <th>name</th>
+    <th>ip</th>
+    <th>description</th>
+  </tr>  
+{%for u in instruments%}
+  <tr>
+    <td>{{ u.id }}</td>
+    <td>{{ u.name }}</td>
+    <td>{{ u.ip }}</td>
+    <td>{{ u.description }}</td>
+  </tr>
+{%endfor%}
+</table>
+{% endblock %}

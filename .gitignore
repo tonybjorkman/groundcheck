@@ -1,3 +1,7 @@
 credentials.txt
+docs/
+alembic-migration/
 __pycache__/
-myenv/
+venvgroundc/
+*.sqlite
+*.db
