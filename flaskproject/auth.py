@@ -20,7 +20,7 @@ def signup_post():
     name = request.form.get('name')
     password = request.form.get('password')
 
-    user = User.query.filter_by(email=email).first()
+    user = db.Session().query(User).filter_by(email=email).first()
 
     if user:
         flash('email already exists')
@@ -47,7 +47,7 @@ def login_post():
     password = request.form.get('password')
     remember = True if request.form.get('remember') else False
 
-    user = User.query.filter_by(email=email).first()
+    user = db.Session().query(User).filter_by(email=email).first()
 
     if not user or not check_password_hash(user.password, password):
         flash('Please check your login details and try again.')

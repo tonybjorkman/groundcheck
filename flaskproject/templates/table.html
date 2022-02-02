@@ -20,14 +20,24 @@
     <td>{{ u.name }}</td>
     <td>{{ u.password }}</td>
     <td>{{ u.email }}</td>
+    <td><a href="/table/del/user/{{ u.id }}">remove</a></td>
   </tr>
 {%endfor%}
 </table>
+<br>
 <h2 class="subtitle">
   Instruments 
 </h2>
+<p>Add new:</p> 
+<form method="post">
+<input type="text" name="name" placeholder="name"/><br>
+<input type="text" name="description" placeholder="description"/><br>
+<input type="text" name="ip" placeholder="ip"/><br>
+<input type="submit" value="Submit"/><br>
+</form>
 
-<table >
+</form>
+<table align="center" >
   <tr>
     <th>id</th>
     <th>name</th>
@@ -40,6 +50,29 @@
     <td>{{ u.name }}</td>
     <td>{{ u.ip }}</td>
     <td>{{ u.description }}</td>
+    <td><a href="/table/del/instrument/{{ u.id }}">remove</a></td>
+  </tr>
+{%endfor%}
+</table>
+<br>
+<h2 class="subtitle">
+  Test Samples 
+</h2>
+<table align="center">
+  <tr>
+    <th>id</th>
+    <th>test value</th>
+    <th>subject</th>
+    <th>instrument</th>
+    <th>test time</th>
+  </tr>  
+{%for u in samples%}
+  <tr>
+    <td>{{ u.id }}</td>
+    <td>{{ u.test_value }}</td>
+    <td>{{ u.user.name }}</td>
+    <td>{{ u.instrument.name }}</td>
+    <td>{{ u.test_time }}</td>
   </tr>
 {%endfor%}
 </table>
