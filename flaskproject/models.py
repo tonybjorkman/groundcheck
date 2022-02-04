@@ -9,20 +9,25 @@ Base = declarative_base()
 hugo = "olle"
 
 class User(UserMixin, Base):
-
     __tablename__ = 'user'
     id = Column(Integer, primary_key=True) # primary keys are required by SQLAlchemy
     email = Column(String(100), unique=True)
     password = Column(String(100))
     name = Column(String(1000))
 
+class Employee(Base):
+    __tablename__ = 'employee'
+    id = Column(Integer, primary_key=True) 
+    employee_id = Column(Integer)
+    manager = Column(String(255))
+
 class TestSample(Base):
     __tablename__ = 'test_sample'
     id = Column(Integer, primary_key=True)
     test_value = Column(Numeric(10,2))
+    passed = Column(Boolean)
+    error = Column(Boolean)
     description = Column(String(1000))
-    user_id = Column(Integer, ForeignKey('user.id'))
-    user = relationship('User')
     test_time = Column(DateTime)
     instrument_id = Column(Integer, ForeignKey('instrument.id'))
     instrument = relationship('Instrument')
@@ -39,11 +44,13 @@ class ControlledEntry(Base):
 
     __tablename__ = 'controlled_entry'
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('user.id'))
-    user = relationship('User')
-    entry = Column(DateTime)
+    employee_id = Column(Integer, ForeignKey('employee.id'))
+    employee = relationship('Employee')
+    entry_time = Column(DateTime)
     test_id = Column(Integer, ForeignKey('test_sample.id'))
     test = relationship('TestSample')
+    handled = Column(Boolean)
+    description = Column(String(1000))
 
 class Settings(Base):
 
