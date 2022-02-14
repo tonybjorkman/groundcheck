@@ -1,0 +1,2 @@
+skapa en tcp uppkopplingstest.
+Skickar ett meddelande och får en ping tillbaka.
