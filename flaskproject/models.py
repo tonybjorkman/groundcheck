@@ -18,9 +18,12 @@ class User(UserMixin, Base):
 class Employee(Base):
     __tablename__ = 'employee'
     id = Column(Integer, primary_key=True) 
-    employee_id = Column(Integer)
+    employee_number = Column(Integer)
     manager = Column(String(255))
 
+# Does not have employeeID on it since
+# it will only be saved if connected to 
+# an ControlledEntry which has it.
 class TestSample(Base):
     __tablename__ = 'test_sample'
     id = Column(Integer, primary_key=True)
