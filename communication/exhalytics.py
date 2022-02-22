@@ -2,6 +2,7 @@ import socket
 import select
 import sys
 import threading
+import time
 from types import SimpleNamespace
 
 
@@ -15,14 +16,30 @@ time.
 4.print all statuses with print_status_list() 
 
  '''
-class ExhalyticStatusMonitor:
+class Event(object):
+    pass
+
+class Observable(object):
+    def __init__(self):
+        self.callbacks = []
+    def subscribe(self, callback):
+        self.callbacks.append(callback)
+    def fire(self, **attrs):
+        e = Event()
+        e.source = self
+        for k, v in attrs.items():
+            setattr(e, k, attrs[k])
+        for fn in self.callbacks:
+            fn(e)
+
+class ExhalyticStatusMonitor(Observable):
 
     class Target:
         def __init__(self,host,port):
             self.host = host
             self.port = port
             self.connected = False
-            self.status = 'not connected'
+            self.status = 'NO_CONNECTION'
             self.socket = None
 
         def __str__(self) -> str:
@@ -31,11 +48,36 @@ class ExhalyticStatusMonitor:
     def __init__(self):
         self.buffer = []
         self.targets = []
+        self.thread = None
+        self.cancelled = False
+        self.callbacks = []
+        self.prev_target_statuses = []
         print("created status monitor")
+
+    def start_run_thread(self):
+        self.thread = threading.Thread(target=self._run)
+        self.thread.daemon = True
+        self.thread.start()
+        return self.thread
+
+    def _run(self,sample_interval=5):
+        next_tick = time.time()+sample_interval
+        while not self.cancelled:
+            if time.time() > next_tick:
+                self.connect_to_targets()
+                self.update_target_statuses()
+                if self.has_targets_changed():
+                    self.fire(event_type='target_change')
+                self.print_target_statuslist()
+                self.fire(event_type='tick')
+                next_tick = time.time() + sample_interval                    
+            time.sleep(1)
 
     def add_target(self, host, port):
         target = self.Target(host, port)
-        self.targets.append(target) 
+        self.targets.append(target)
+        #prevent this change from triggering change event
+        self.prev_target_statuses = self._get_target_statuses() 
 
     def print_target_statuslist(self):
         for t in self.targets:
@@ -54,18 +96,24 @@ class ExhalyticStatusMonitor:
                     print("Could not connect to target on port:"+str(t.port))
                     t.connected = False
 
+    def _get_target_statuses(self):
+        return [t.status for t in self.targets]
+    
+    def has_targets_changed(self):
+        target_statuses = self._get_target_statuses()
+        if target_statuses != self.prev_target_statuses:
+            self.prev_target_statuses = target_statuses
+            return True
+        return False
+
     def update_target_statuses(self):
         for t in self.targets:
             try:
-                response = self.ping_instrument(t, "minping")
-                if response == 'minping':
-                    t.status = 'OK'
-                elif response == 'error':
-                    t.status = 'Error'
-                elif response is None:
-                    t.status = 'not connected'
+                response = self.ping_instrument(t, "STATUS?")
+                if response is not None:
+                    t.status = response
             except:
-                t.status = 'not connected'
+                t.status = 'NO_CONNECTION'
                 t.connected = False
     
     def ping_instrument(self,target,message):
@@ -84,11 +132,16 @@ class ExhalyticStatusMonitor:
     def get_buffer(self):
         return self.buffer
 
-    def close(self): 
+    def _close(self): 
         for t in self.targets:
-            t.socket.close()
+            if t.socket is not None:
+                t.socket.close()
             print("closed socket for target on port:"+str(t.port))
-
+    
+    def cancel(self):
+        self.cancelled = True
+        self._close()
+        print("cancelled status monitor")
 '''
 messages from Exhalytics that have not been requested are sent on a separate port.
  Any number of clients can be connected to the port for unrequested messages from

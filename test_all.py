@@ -2,12 +2,13 @@ from communication.exhalytics import ExhalyticsSampleReader,ExhalyticStatusMonit
 from communication.tcp_test_services import TCPBouncer,TCPInbound
 import socket
 import time 
+from types import SimpleNamespace
 
 def test_mail():
     print('foo')
     assert True
 
-def test_bouncer_tcp_echo():
+def test_bouncer_tcp():
     print('==== Test Bouncer TCP ====')
     print("Make sure that the TCP_Bouncer script is running..")
     words = ['hej', 'på', 'dig', 'nu']
@@ -49,6 +50,28 @@ def test_bouncer_tcp_response():
         print('received: '+received)
         assert responses[w] == received
 
+    replies = ['one','two','three']
+    bouncer.set_response(replies)
+    
+    # see that sequenced responses work
+    for w in replies:
+        time.sleep(1)
+        s.sendall('msg'.encode())
+        received = s.recv(1024).decode()
+        print('sent:'+'msg')
+        print('received: '+received)
+        assert w == received
+
+    # see that echo responses work
+    bouncer.set_response(None)
+    for w in replies:
+        time.sleep(1)
+        s.sendall(w.encode())
+        received = s.recv(1024).decode()
+        print('sent:'+w)
+        print('received: '+received)
+        assert w == received
+
     bouncer.close()
     s.close()
     time.sleep(4)
@@ -60,7 +83,7 @@ def test_tcp_exhalytics_monitor_single():
 
     print('==== Test Exhalytics Monitor  ====')
     port = 50000 
-    bouncer = TCPBouncer(port)
+    bouncer = TCPBouncer(port, {'STATUS?':'OK'})
     bouncer.start_run_thread()
     
     time.sleep(2)
@@ -70,21 +93,37 @@ def test_tcp_exhalytics_monitor_single():
     status_monitor.update_target_statuses()
     response = status_monitor.targets[0].status
     assert response == 'OK' 
-    status_monitor.close()
+    status_monitor.cancel()
     bouncer.close()
     time.sleep(4)
+
+
 
 def test_tcp_exhalytics_monitor_multi_ok():
     '''
     Same as single but with multiple targets(bouncers) 
-    '''
 
+    target change event:
+    a target changed should activate after x ticks.
+
+    '''
+    event_store = SimpleNamespace(tick_count=0, target_change_count=0)
+     
+    def eventhandler(evarg):
+        if evarg.event_type == 'target_change':
+            event_store.target_change_count += 1
+            print('status change event handled #'+str(event_store.target_change_count))
+        elif evarg.event_type == 'tick':
+            print('tick event handled')
+            event_store.tick_count += 1
+            print(event_store.tick_count)
+            
     print('==== Test Exhalytics Monitor Multi  ====')
     num_bouncers = 3
     bouncers = []
     for i in range(num_bouncers):
         port = 50000 + i
-        bouncer = TCPBouncer(port)
+        bouncer = TCPBouncer(port, {'STATUS?':'OK'})
         bouncer.start_run_thread()
         bouncers.append(bouncer)
     
@@ -93,19 +132,46 @@ def test_tcp_exhalytics_monitor_multi_ok():
     for i in range(num_bouncers):
         status_monitor.add_target('localhost', 50000 + i)
     
-    #add one target that is not connected
-    #status_monitor.add_target('localhost', 50000 + num_bouncers)
-
-    status_monitor.connect_to_targets()
-    status_monitor.update_target_statuses()
-    status_monitor.print_target_statuslist()
-    for t in status_monitor.targets[:num_bouncers-1]:
-        assert t.status == 'OK'
+    #add one more target that should not be connected to provoke error
+    status_monitor.add_target('localhost', 50000 + num_bouncers)
     
-    status_monitor.close()
+    status_monitor.subscribe(eventhandler)
+    status_monitor.start_run_thread()
+
+    # wait for 2 tick events from the monitor. 
+    while event_store.tick_count < 2:
+        time.sleep(1)
+
+
+    for t in status_monitor.targets[:-1]:
+        assert t.status == 'OK'
+    assert status_monitor.targets[-1].status == 'NO_CONNECTION'
+    # target changed since they go from disconnected to 
+    # connected after they are added to the monitor
+    assert  event_store.target_change_count == 1
+
+    seq_bouncer = TCPBouncer(50000 + num_bouncers + 1, ["OK","OK","ERROR"])
+    seq_bouncer.start_run_thread()
+    status_monitor.add_target('localhost',50000 + num_bouncers + 1)
+    bouncers.append(seq_bouncer) 
+    
+    while True: 
+        if event_store.tick_count > 10:
+            assert False
+            break
+        elif event_store.target_change_count == 3:
+            # 3 because first 2 are from connections. last is from ERROR reply
+            assert status_monitor.targets[-1].status == 'ERROR'
+            print('target change event at tick '+str(event_store.tick_count))
+            break
+
+        time.sleep(1)
+
+    status_monitor.cancel()
     for b in bouncers:
         b.close()
     time.sleep(4)
+
 
 def test_tcp_exhalytics_sample_reader():
     ''' Tests if it can receive sample data as sent
