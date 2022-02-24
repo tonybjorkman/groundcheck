@@ -33,7 +33,7 @@ class Mailer:
             # Login
             self.smtpObj.login(username, password)
 
-    def send_mail(self, to, msg, title):
+    def send_mail(self, to, title, msg):
         try: 
             sender = EmailMessage()
             emailtext = "From: Autosober Alert " + settings.server_address + \
@@ -42,7 +42,7 @@ class Mailer:
 
             print("sending mail :"+msg)
             self.smtpObj.sendmail(settings.server_user, to, emailtext) 
-        except SMTPException: 
+        except smtplib.SMTPException: 
             print("Error: unable to send email")
 
 

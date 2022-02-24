@@ -8,8 +8,8 @@ import os.path
 
 class Settings():
 
-	def __init__(self):
-		self.config_file = 'real_config.ini'
+	def __init__(self, filename):
+		self.config_file = filename
 		config = configparser.ConfigParser()
 		if not os.path.exists(self.config_file):
 			print('No config file found: using defult settings')
