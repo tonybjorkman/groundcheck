@@ -1,6 +1,14 @@
 import smtplib
 
+from flask import session
+from read_settings import *
+from email.message import EmailMessage
+
+settings=Settings()
+
 class Mailer:
+
+
 
     def __init__(self,debug=True) -> None:
         # Create a SMTP object
@@ -14,16 +22,29 @@ class Mailer:
         # Start the connection
         if not self.debug:
             self.smtpObj.starttls()
-            # Read username and password from file
-            with open('credentials.txt', 'r') as f:
-                username = f.readline().strip()
-                password = f.readline().strip()
+            username = settings.server_user
+            password = settings.server_pass
+            
+            # # Read username and password from file
+            # with open('credentials.txt', 'r') as f:
+            #     username = f.readline().strip()
+            #     password = f.readline().strip()
+            
             # Login
             self.smtpObj.login(username, password)
 
-    def send_mail(self, to, msg):
-        print("sending mail :"+msg)
-        self.smtpObj.sendmail("sender@msg.com", to, msg) 
+    def send_mail(self, to, title, msg):
+        try: 
+            sender = EmailMessage()
+            emailtext = "From: Autosober Alert " + settings.server_address + \
+                "\nTo: " + to + "\n" + title + " has occurred \n \n" \
+                    +msg
+
+            print("sending mail :"+msg)
+            self.smtpObj.sendmail(settings.server_user, to, emailtext) 
+        except smtplib.SMTPException: 
+            print("Error: unable to send email")
+
 
     def close(self):
         # Close the connection
