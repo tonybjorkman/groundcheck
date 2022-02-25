@@ -1,11 +1,13 @@
 import socket
 import select
-import sys
+import sys,os
 import threading
 import time
 from types import SimpleNamespace
-
-
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from flaskproject.models import TestSample, Instrument
+import blowfish  
+import binascii 
 '''Messages from client to Exhalytic use one port and are answered on the same port,
 Only one client can be connected to the port used for sending messages to the Exhalytics at any
 time.
@@ -16,6 +18,37 @@ time.
 4.print all statuses with print_status_list() 
 
  '''
+
+
+class InstrumentSupervisor:
+    def __init__(self) -> None:
+        self.monitor = None
+        self.receiver = None
+        self.formatter = ExhalyticFormatter('mykeypassword') 
+    
+    def subscribe_status_change(self,callback):
+        self.monitor.subscribe(callback)
+
+    def initialize_instrument_monitoring(self,instruments):
+        self.monitor = ExhalyticStatusMonitor(self.formatter)
+        for i in instruments:
+            self.monitor.add_target(i.hostname, i.port)
+        self.monitor.start_run_thread()
+
+    def start_sample_receiver_server(self,hostname,port):
+        self.receiver = ExhalyticsSampleReceiver(hostname,port,self.formatter) 
+        self.receiver.start_run_thread()
+
+    def check_instrument_connection(self):
+        pass
+
+    def subscribe_for_samples(self,callback):
+        self.receiver.subscribe(callback)
+
+    def close(self):
+        self.monitor.cancel()
+        self.receiver.cancel() 
+
 class Event(object):
     pass
 
@@ -45,10 +78,11 @@ class ExhalyticStatusMonitor(Observable):
         def __str__(self) -> str:
             return 'host:'+self.host+'port:'+str(self.port)+'connected:'+str(self.connected)+'status:'+str(self.status)
 
-    def __init__(self):
+    def __init__(self,formatter):
         self.buffer = []
         self.targets = []
         self.thread = None
+        self.formatter = formatter
         self.cancelled = False
         self.callbacks = []
         self.prev_target_statuses = []
@@ -153,13 +187,46 @@ Exhalytics.
 4buffer grabbed with get_msgs()
 
 '''
-class ExhalyticsSampleReader:
-    def __init__(self, host, port):
+
+class ExhalyticFormatter:
+    def __init__(self, key) -> None:
+        self.key = key
+        self.cipher = blowfish.Cipher(key.encode())
+        
+    def get_message_length(self,message):
+        ''' first 4 bytes of message are the length of the message'''
+        # such as 0000 0011 for a 17*32bit message
+        hexlength = message[0:4] #take 8 hex chars = 4 bytes
+        print(hexlength)
+        decimal_length = int.from_bytes(hexlength,'big')
+        print(decimal_length)
+        content = message[4:]
+        return decimal_length,content
+
+    def decode_sample(self, sample):
+        length, content = self.get_message_length(sample)
+        byte_msg = b"".join(self.cipher.decrypt_ecb(content))
+        as_string = byte_msg[4:].decode("utf-8").strip()
+        return as_string
+        #print(binascii.unhexlify(byte_msg[8:]))
+    
+    def decode_status(self, status):
+        raise NotImplementedError
+
+    def encode(self,str):
+        raise NotImplementedError
+    
+
+
+class ExhalyticsSampleReceiver(Observable):
+    def __init__(self, host, port,formatter):
         self.host = host
         self.port = port
+        self.formatter = formatter
         self.buffer = []
         self.thread = None
         self.cancelled = False
+        self.samples = []
 
     def start_run_thread(self):
         self.thread = threading.Thread(target=self.wait_for_connection)
@@ -193,8 +260,14 @@ class ExhalyticsSampleReader:
 
         self.connection.close()
         self.sock.close()
+    
+    def parse_messages(self):
+        for msg in self.buffer:
+            sample = self.formatter.decode_sample(msg)    
+            self.samples.append(sample)
+            self.buffer = []
 
-    def get_msgs(self):
+    def get_msg_buffer(self):
         return self.buffer
 
     def close(self):

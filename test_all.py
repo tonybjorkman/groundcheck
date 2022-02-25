@@ -1,4 +1,4 @@
-from communication.exhalytics import ExhalyticsSampleReader,ExhalyticStatusMonitor
+from communication.exhalytics import ExhalyticFormatter, ExhalyticsSampleReceiver,ExhalyticStatusMonitor
 from communication.tcp_test_services import TCPBouncer,TCPInbound
 import socket
 import time 
@@ -182,7 +182,7 @@ def test_tcp_exhalytics_sample_reader():
     send_msg = ['sent','from','test','sender TCPInbound']
     inbound = TCPInbound(port, send_msg)
     
-    sample_reader = ExhalyticsSampleReader('localhost',port)
+    sample_reader = ExhalyticsSampleReceiver('localhost',port)
     
     # inbound has a 2 sec delay and then starts 
     sample_reader.start_run_thread()
@@ -191,7 +191,7 @@ def test_tcp_exhalytics_sample_reader():
     while not inbound.finished:
         time.sleep(1)
 
-    reply = sample_reader.get_msgs()
+    reply = sample_reader.get_msg_buffer()
 
     inbound.close()
     sample_reader.close()
@@ -201,3 +201,11 @@ def test_tcp_exhalytics_sample_reader():
     assert reply == send_msg
 
     # start the tcp_autosender
+
+
+def test_exhalytic_decryption():
+    formatter = ExhalyticFormatter('AUTOSOBER')
+    byte_array = bytearray.fromhex('00000006CDC471657876BBCD2849C7E9104D7EC84B13788DE078257E') 
+    length,_ = formatter.get_message_length(byte_array)
+    assert length == 6
+    formatter.decode_sample(byte_array)
