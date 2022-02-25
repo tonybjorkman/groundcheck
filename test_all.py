@@ -206,6 +206,12 @@ def test_tcp_exhalytics_sample_reader():
 def test_exhalytic_decryption():
     formatter = ExhalyticFormatter('AUTOSOBER')
     byte_array = bytearray.fromhex('00000006CDC471657876BBCD2849C7E9104D7EC84B13788DE078257E') 
-    length,_ = formatter.get_message_length(byte_array)
+    length,encrypted_msg = formatter.get_message_length(byte_array)
     assert length == 6
-    formatter.decode_sample(byte_array)
+    print(formatter.decode_message(byte_array))
+
+def test_encryption():
+    formatter = ExhalyticFormatter('AUTOSOBER')
+    padded, num = formatter._padd_message('abenc')
+    header = formatter._create_header(padded,num)
+    print(header) 

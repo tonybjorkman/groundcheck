@@ -1,3 +1,4 @@
+import math
 import socket
 import select
 import sys,os
@@ -189,6 +190,7 @@ Exhalytics.
 '''
 
 class ExhalyticFormatter:
+    
     def __init__(self, key) -> None:
         self.key = key
         self.cipher = blowfish.Cipher(key.encode())
@@ -203,13 +205,59 @@ class ExhalyticFormatter:
         content = message[4:]
         return decimal_length,content
 
-    def decode_sample(self, sample):
-        length, content = self.get_message_length(sample)
+    def decode_message(self, sample):
+        '''   <num blocks> {<num blocks><num chars><message>}  
+               inside {} is encrypted and needs to be decrypted.
+               1 block = 4 bytes'''
+        num_blocks, content = self.get_message_length(sample)
         byte_msg = b"".join(self.cipher.decrypt_ecb(content))
-        as_string = byte_msg[4:].decode("utf-8").strip()
+        num_chars = int.from_bytes(byte_msg[:4], 'big')
+        print("num_blocks:"+str(num_blocks))
+        print("num_chars:"+str(num_chars))
+        decrypt_message_byte = byte_msg[4:]
+        as_string = decrypt_message_byte.decode("utf-8")
         return as_string
         #print(binascii.unhexlify(byte_msg[8:]))
     
+    def encode_message(self, message):
+        formatted = self._format_message(message)
+
+    def _format_message(self, message):
+        padded, added = self._padd_message(message)
+        #from string to bytes
+        padded_bytes = padded.encode()
+        header_bytes = self._create_header(padded_bytes,added)
+        print(header_bytes.extend(header_bytes))
+
+    def _padd_message(self, message):
+        '''adds blankspace to message so it is a multiple of 4 bytes'''
+        chars_to_add = 4-len(message)%4
+        print("chars_to_add:"+str(chars_to_add))
+        for i in range(chars_to_add):
+            message += ' '
+        return message,chars_to_add
+
+    def _create_header(self, message,added):
+        ''' add the length of the message to the front of the message'''
+        num_chars = len(message)-added
+        #integer to bytearray
+        num_chars_byte = num_chars.to_bytes(4, 'big')
+
+        # number of 4 byte blocks
+        num_blocks = int(len(message)/4)
+        num_blocks_byte = num_blocks.to_bytes(4, 'big')
+        #join bytes
+        num_blocks_byte = num_blocks_byte + num_chars_byte
+        print(num_blocks_byte)      
+                 
+        return num_blocks_byte
+
+
+    def every_second_item_from_list(self, list):
+        for i in range(len(list)):
+            if i%2 == 0:
+                yield list[i]
+
     def decode_status(self, status):
         raise NotImplementedError
 
