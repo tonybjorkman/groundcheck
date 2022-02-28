@@ -3,6 +3,7 @@ from communication.tcp_test_services import TCPBouncer,TCPInbound
 import socket
 import time 
 from types import SimpleNamespace
+import pytest
 
 def test_mail():
     print('foo')
@@ -30,7 +31,7 @@ def test_bouncer_tcp():
 
     bouncer.close()
     s.close()
-    time.sleep(4)
+    time.sleep(10)
 
 def test_bouncer_tcp_response():
     print('==== Test Bouncer TCP Response ====')
@@ -74,7 +75,9 @@ def test_bouncer_tcp_response():
 
     bouncer.close()
     s.close()
-    time.sleep(4)
+    # need to wait long time for sockets to close.
+    # 4 sec is not enough, consequtive tests may fail.
+    time.sleep(10)
 
 def test_tcp_exhalytics_monitor_single():
     ''' Should simulate that this app is sending a status-request query
@@ -209,9 +212,32 @@ def test_exhalytic_decryption():
     length,encrypted_msg = formatter.get_message_length(byte_array)
     assert length == 6
     print(formatter.decode_message(byte_array))
+    assert formatter.decode_message(byte_array) == 'INFO #ID<1234567>'
 
-def test_encryption():
+
+def test_get_num_blocks():
     formatter = ExhalyticFormatter('AUTOSOBER')
-    padded, num = formatter._padd_message('abenc')
-    header = formatter._create_header(padded,num)
-    print(header) 
+    blocks = formatter._get_num_blocks(b'12345678')
+    assert blocks == 2
+    with pytest.raises(Exception):
+        formatter._get_num_blocks('123456789')
+
+def test_header():
+    formatter = ExhalyticFormatter('AUTOSOBER')
+    header, blocks = formatter._create_header('hello   ',3)
+    print(header)
+    assert header == b'\x00\x00\x00\x04\x00\x00\x00\x05'
+    print(blocks)
+    assert blocks == 4
+
+def test_print_encode_string():
+    formatter = ExhalyticFormatter('mykey')
+    msg = 'hello'
+    header = int(5).to_bytes(4,byteorder='big')
+    block_len = int(4).to_bytes(4,byteorder='big')
+    print(block_len.hex()+header.hex()+msg.encode().hex())
+    encrypted = formatter.encode_string_to_message(msg)
+    print(encrypted.hex(sep=' '))
+    # encryption below generated with http://blowfish.online-domain-tools.com/
+    # and pre-pended with the known number of 4byte blocks
+    assert encrypted.hex() == '000000047cb22461eba4477e7b3f541ebf50a4ca'

@@ -79,7 +79,7 @@ class ExhalyticStatusMonitor(Observable):
         def __str__(self) -> str:
             return 'host:'+self.host+'port:'+str(self.port)+'connected:'+str(self.connected)+'status:'+str(self.status)
 
-    def __init__(self,formatter):
+    def __init__(self,formatter=None):
         self.buffer = []
         self.targets = []
         self.thread = None
@@ -214,24 +214,37 @@ class ExhalyticFormatter:
         num_chars = int.from_bytes(byte_msg[:4], 'big')
         print("num_blocks:"+str(num_blocks))
         print("num_chars:"+str(num_chars))
-        decrypt_message_byte = byte_msg[4:]
+        decrypt_message_byte = byte_msg[4:4+num_chars]
         as_string = decrypt_message_byte.decode("utf-8")
         return as_string
         #print(binascii.unhexlify(byte_msg[8:]))
     
-    def encode_message(self, message):
-        formatted = self._format_message(message)
+    def encrypt(self, msg_string):
+        message_bytes, num_blocks = self._format_message_from_string(msg_string)
+        encrypted_msg = self._encrypt_bytes(message_bytes)
+        encrypted_msg = self._get_num_blocks(encrypted_msg).to_bytes(4, 'big') + encrypted_msg
+        return encrypted_msg
 
-    def _format_message(self, message):
-        padded, added = self._padd_message(message)
-        #from string to bytes
-        padded_bytes = padded.encode()
-        header_bytes = self._create_header(padded_bytes,added)
-        print(header_bytes.extend(header_bytes))
+    def _get_num_blocks(self,msg):
+        if len(msg)%8 != 0:
+            raise Exception('message length must be a multiple of 8')
+        return int(len(msg)/4)
+
+    def _format_message_from_string(self, message):
+        ''' Pads with blankspace and adds headers according to 
+        Autosober instrument protocol '''
+        padded_msg, added_blanks = self._padd_message(message)
+        header, num_blocks = self._create_header(padded_msg,added_blanks)
+        # string to bytes
+        byte_padded_msg = padded_msg.encode()
+        msg_w_header = header+byte_padded_msg
+        print((msg_w_header).hex(' '))
+        return msg_w_header, num_blocks
 
     def _padd_message(self, message):
-        '''adds blankspace to message so it is a multiple of 4 bytes'''
-        chars_to_add = 4-len(message)%4
+        '''adds blankspace to message so it is a multiple of 8 bytes
+        so it can be used with python blowfish multiple of 8 byte requirement'''
+        chars_to_add = 8-(len(message))%8
         print("chars_to_add:"+str(chars_to_add))
         for i in range(chars_to_add):
             message += ' '
@@ -243,31 +256,31 @@ class ExhalyticFormatter:
         #integer to bytearray
         num_chars_byte = num_chars.to_bytes(4, 'big')
 
-        # number of 4 byte blocks
-        num_blocks = int(len(message)/4)
+        # number of 4 byte blocks (non-standard header)
+        # as part of the Autosober protocol,
+        # in reality python blowfish uses 64bit blocksize. 
+        # blocks in msg + 2 for the 4byte nonstandard header
+        # and the 4byte block length header.
+        num_blocks = int(len(message)/4)+2
         num_blocks_byte = num_blocks.to_bytes(4, 'big')
+        print('num blocks:'+str(num_blocks) + 'in message'+str(message)+'.')
         #join bytes
-        num_blocks_byte = num_blocks_byte + num_chars_byte
-        print(num_blocks_byte)      
+        non_standard_header = num_blocks_byte + num_chars_byte
+        #print(num_blocks_byte)      
                  
-        return num_blocks_byte
-
-
-    def every_second_item_from_list(self, list):
-        for i in range(len(list)):
-            if i%2 == 0:
-                yield list[i]
+        return non_standard_header, num_blocks
 
     def decode_status(self, status):
         raise NotImplementedError
 
-    def encode(self,str):
-        raise NotImplementedError
+    def _encrypt_bytes(self,byte_msg):
+        print(len(byte_msg))
+        return b''.join(self.cipher.encrypt_ecb(byte_msg))
     
 
 
 class ExhalyticsSampleReceiver(Observable):
-    def __init__(self, host, port,formatter):
+    def __init__(self, host, port,formatter=None):
         self.host = host
         self.port = port
         self.formatter = formatter
